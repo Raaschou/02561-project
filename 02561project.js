@@ -104,13 +104,27 @@ async function main() {
             frontFace: "ccw",
             cullMode: "back",
         },
+        multisample: {
+            count: 4,
+        },
     });
+
+    const canvasTexture = context.getCurrentTexture();
 
     const depthTexture = device.createTexture({
         size: [canvas.width, canvas.height],
         format: 'depth24plus',
+        sampleCount: 4,
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
+    const msaaTexture = device.createTexture({
+        size: [canvas.width, canvas.height],
+        format: canvasTexture.format,
+        sampleCount: 4,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+
+
 
     const uniformBufferSize = 4 * 16; // 4x4 matrix
 
@@ -151,7 +165,8 @@ async function main() {
         const pass = encoder.beginRenderPass({
             label: "render pass",
             colorAttachments: [{
-                view: context.getCurrentTexture().createView(),
+                view: msaaTexture.createView(),
+                resolveTarget: canvasTexture.createView(),
                 loadOp: "clear",
                 clearValue: [0.5, 0.5, 0.5, 1.0],
                 storeOp: "store",
