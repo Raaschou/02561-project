@@ -20,8 +20,11 @@ async function main() {
     const obj_filename = "../3d_models/sphere.obj";
     const sphereObj = await readOBJFile(obj_filename, 1.0, true);
 
+
+
     const sphereVertices = sphereObj.vertices;
     const flatSphereVertices = flatten(sphereVertices);
+
 
 
     const sphereIndices = sphereObj.indices;
@@ -38,12 +41,11 @@ async function main() {
 
 
     device.queue.writeBuffer(spherePosBuffer, 0, flatSphereVertices);
-    console.log(new Float32Array(flatten(vec3())).byteLength)
     const spherePosBufferLayout = {
         label: "pos buffer layout",
-        arrayStride: sizeof["vec3"],
+        arrayStride: sizeof["vec4"],
         attributes: [{
-            format: "float32x3",
+            format: "float32x4",
             offset: 0,
             shaderLocation: 0,
         }]
@@ -56,9 +58,9 @@ async function main() {
     });
 
     const sphereNormalBufferLayout = {
-        arrayStride: sizeof['vec3'],
+        arrayStride: sizeof['vec4'],
         attributes: [{
-            format: 'float32x3',
+            format: 'float32x4',
             offset: 0,
             shaderLocation: 1,
         }]
@@ -134,9 +136,9 @@ async function main() {
     const aspect = canvas.width / canvas.height
     const projectionMatrix = perspective(90.0, aspect, 0.1, 100.0)
     const modelViewProjectionMatrix = mat4();
-    const eye = vec3(0.0, 0.0, -5.0);
+    const eye = vec3(0.5, 0.5, 3.0);
     const lookAtPoint = vec3(0.0, 0.0, 0.0);
-    const upVec = vec3(0.0, 1.0, 0.0)
+    const upVec = vec3(0.0, 1.0, 2.0)
     const viewMatrix = lookAt(eye, lookAtPoint, upVec)
     const transformationMatrix = mult(projectionMatrix, mult(viewMatrix, modelViewProjectionMatrix))
 
