@@ -16,33 +16,36 @@ async function main() {
     context.configure({ device: device, format: canvasFormat });
 
 
-    // Setup sphere using OBJParser instead of subdivider
+    // Setup obj using OBJParser instead of subdivider
     const obj_filename = "../3d_models/utah_teapot.obj";
-    const sphereObj = await readOBJFile(obj_filename, 0.25, true);
+    const obj = await readOBJFile(obj_filename, 0.25, true);
 
 
-    const sphereVertices = sphereObj.vertices;
-    const flatSphereVertices = flatten(sphereVertices);
+    const objVertices = obj.vertices;
+    const flatObjVertices = flatten(objVertices);
 
 
 
-    const sphereIndices = sphereObj.indices;
-    const flatSphereIndices = flatten(sphereIndices);
+    const objIndices = obj.indices;
+    const flatObjIndices = flatten(objIndices);
 
-    const sphereNormals = sphereObj.normals;
-    const flatSphereNormals = flatten(sphereNormals);
+    const objNormals = obj.normals;
+    const flatObjNormals = flatten(objNormals);
 
-    const textureCoordinates = sphereObj.texCoords
 
-    const spherePosBuffer = device.createBuffer({
+    const objTexCoords = obj.texCoords
+
+
+
+    const objPosBuffer = device.createBuffer({
         label: "positions buffer",
-        size: flatSphereVertices.byteLength,
+        size: flatObjVertices.byteLength,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
 
 
-    device.queue.writeBuffer(spherePosBuffer, 0, flatSphereVertices);
-    const spherePosBufferLayout = {
+    device.queue.writeBuffer(objPosBuffer, 0, flatObjVertices);
+    const objPosBufferLayout = {
         label: "pos buffer layout",
         arrayStride: sizeof["vec4"],
         attributes: [{
@@ -51,14 +54,13 @@ async function main() {
             shaderLocation: 0,
         }]
     };
-
-    const sphereNormalBuffer = device.createBuffer({
-        label: "sphere normal buffer",
-        size: flatSphereNormals.byteLength,
+    const objNormalBuffer = device.createBuffer({
+        label: "obj normal buffer",
+        size: flatObjNormals.byteLength,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
 
-    const sphereNormalBufferLayout = {
+    const objNormalBufferLayout = {
         arrayStride: sizeof['vec4'],
         attributes: [{
             format: 'float32x4',
@@ -66,20 +68,20 @@ async function main() {
             shaderLocation: 1,
         }]
     }
-    device.queue.writeBuffer(sphereNormalBuffer, 0, flatSphereNormals);
+    device.queue.writeBuffer(objNormalBuffer, 0, flatObjNormals);
 
-    const sphereIndexBuffer = device.createBuffer({
+    const objIndexBuffer = device.createBuffer({
         label: "index buffer",
-        size: sphereIndices.byteLength,
+        size: objIndices.byteLength,
         usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
     })
 
-    device.queue.writeBuffer(sphereIndexBuffer, 0, sphereIndices);
+    device.queue.writeBuffer(objIndexBuffer, 0, objIndices);
 
 
     const textureBuffer = device.createBuffer({
         label: "texture buffer",
-        size: flatten(textureCoordinates).byteLength,
+        size: flatten(objTexCoords).byteLength,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     })
     const textureBufferLayout = {
@@ -91,7 +93,7 @@ async function main() {
             shaderLocation: 2,
         }]
     }
-    device.queue.writeBuffer(textureBuffer, 0, flatten(textureCoordinates))
+    device.queue.writeBuffer(textureBuffer, 0, flatten(objTexCoords))
 
 
 
@@ -106,7 +108,7 @@ async function main() {
         vertex: {
             module: wgsl,
             entryPoint: 'main_vs',
-            buffers: [spherePosBufferLayout, sphereNormalBufferLayout, textureBufferLayout],
+            buffers: [objPosBufferLayout, objNormalBufferLayout, textureBufferLayout],
         },
         fragment: {
             module: wgsl,
@@ -185,10 +187,10 @@ async function main() {
                 binding: 1,
                 resource: depthMap.createView()
             },
-            {
-                binding: 2,
-                resource: depthMap.sampler
-            },
+            /*             {
+                            binding: 2,
+                            resource: depthMap.sampler
+                        }, */
         ],
     });
 
@@ -225,13 +227,13 @@ async function main() {
         });
 
         pass.setPipeline(pipeline);
-        pass.setVertexBuffer(0, spherePosBuffer);
-        pass.setVertexBuffer(1, sphereNormalBuffer);
+        pass.setVertexBuffer(0, objPosBuffer);
+        pass.setVertexBuffer(1, objNormalBuffer);
         pass.setVertexBuffer(2, textureBuffer)
         pass.setBindGroup(0, bindGroup);
-        pass.setIndexBuffer(sphereIndexBuffer, 'uint32');
+        pass.setIndexBuffer(objIndexBuffer, 'uint32');
 
-        pass.drawIndexed(sphereIndices.length);
+        pass.drawIndexed(objIndices.length);
         //pass.draw(positions.length);
         pass.end();
         device.queue.submit([encoder.finish()]);
