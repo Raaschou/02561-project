@@ -17,9 +17,8 @@ async function main() {
 
 
     // Setup sphere using OBJParser instead of subdivider
-    const obj_filename = "../3d_models/sphere.obj";
-    const sphereObj = await readOBJFile(obj_filename, 1.0, true);
-
+    const obj_filename = "../3d_models/utah_teapot.obj";
+    const sphereObj = await readOBJFile(obj_filename, 0.25, true);
 
 
     const sphereVertices = sphereObj.vertices;
@@ -32,6 +31,8 @@ async function main() {
 
     const sphereNormals = sphereObj.normals;
     const flatSphereNormals = flatten(sphereNormals);
+
+    const textureCoordinates = sphereObj.texCoords
 
     const spherePosBuffer = device.createBuffer({
         label: "positions buffer",
@@ -76,6 +77,24 @@ async function main() {
     device.queue.writeBuffer(sphereIndexBuffer, 0, sphereIndices);
 
 
+    const textureBuffer = device.createBuffer({
+        label: "texture buffer",
+        size: flatten(textureCoordinates).byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    })
+    const textureBufferLayout = {
+        label: "texture buffer layout",
+        arrayStride: sizeof["vec2"],
+        attributes: [{
+            format: "float32x2",
+            offset: 0,
+            shaderLocation: 2,
+        }]
+    }
+    device.queue.writeBuffer(textureBuffer, 0, flatten(textureCoordinates))
+
+
+
     // Import wgsl file
     const wgslfile = document.getElementById("wgsl").src;
     const wgslcode = await fetch(wgslfile, { cache: "reload" }).then(r => r.text());
@@ -87,7 +106,7 @@ async function main() {
         vertex: {
             module: wgsl,
             entryPoint: 'main_vs',
-            buffers: [spherePosBufferLayout, sphereNormalBufferLayout],
+            buffers: [spherePosBufferLayout, sphereNormalBufferLayout, textureBufferLayout],
         },
         fragment: {
             module: wgsl,
@@ -208,7 +227,8 @@ async function main() {
         pass.setPipeline(pipeline);
         pass.setVertexBuffer(0, spherePosBuffer);
         pass.setVertexBuffer(1, sphereNormalBuffer);
-        pass.setBindGroup(0, uniformBindGroup);
+        pass.setVertexBuffer(2, textureBuffer)
+        pass.setBindGroup(0, bindGroup);
         pass.setIndexBuffer(sphereIndexBuffer, 'uint32');
 
         pass.drawIndexed(sphereIndices.length);
