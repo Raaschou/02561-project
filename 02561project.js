@@ -252,7 +252,7 @@ async function main() {
     const transformationMatrix = mult(projectionMatrix, mult(viewMatrix, modelViewProjectionMatrix))
 
     // Setup point light and matrices
-    let pointLight = vec3(0, 2.0, -2);
+    let pointLight = vec3(0.5, 1.5, -2);
     // Approximate center of mass, maybe, who knows
     const lightTarget = vec3(0, 0.5, 0.0);
     let lightView = lookAt(pointLight, lightTarget, upVec)

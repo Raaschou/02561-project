@@ -6,7 +6,9 @@ struct VSOut {
 }
 
 struct Uniforms {
-    modelViewProjectionMatrix: mat4x4f,
+    modelViewProjMat: mat4x4f,
+    lightViewProjeMat: mat4x4f,
+    lightPos: vec3f,
 }
 
 @group(0) @binding(0)
@@ -20,12 +22,14 @@ var depthMapSampler: sampler; */
 fn main_vs(
     @location(0) inPos: vec4f,
     @location(1) inNormal: vec3f,
-    @location(2) inCoord: vec2f,
+    @location(2) inColor: vec4f,
+    @location(3) inCoord: vec2f,
 ) -> VSOut {
     var vsOut: VSOut;
 
-    vsOut.position = uniforms.modelViewProjectionMatrix * inPos;
+    vsOut.position = uniforms.modelViewProjMat * inPos;
     vsOut.normal = inNormal;
+    vsOut.color = inColor;
     vsOut.texCoord = inCoord;
     return vsOut;
 }
@@ -33,7 +37,12 @@ fn main_vs(
 @fragment
 fn main_fs(in: VSOut) -> @location(0) vec4f {
     let depth = textureLoad(depthMap, vec2i(in.texCoord), 0);
-    //let sample = depthMapSampler;
-    return depth - in.position * 0.25;
-    //return vec4f(vec3f(depth), 1.0);
+    let wrap = 0.75;
+    // Simple Lambertian shading
+    let diffuse = max(0, dot(uniforms.lightPos, in.normal));
+    let wrapDiffuse = max(0, (dot(uniforms.lightPos, in.normal) + wrap) / (1 + wrap));
+    // Temporary grey coloring, because in.color is 
+    // coloring teapot white with no shading
+    let grey = vec3f(0.75);
+    return vec4f(grey * wrapDiffuse, 1);
 }
