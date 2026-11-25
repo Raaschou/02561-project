@@ -32,6 +32,8 @@ async function main() {
     const objNormals = obj.normals;
     const flatObjNormals = flatten(objNormals);
 
+    const objColors = obj.colors;
+    const flatObjColors = flatten(objColors)
 
     const objTexCoords = obj.texCoords
 
@@ -44,7 +46,6 @@ async function main() {
     });
 
 
-    device.queue.writeBuffer(objPosBuffer, 0, flatObjVertices);
     const objPosBufferLayout = {
         label: "pos buffer layout",
         arrayStride: sizeof["vec4"],
@@ -68,7 +69,24 @@ async function main() {
             shaderLocation: 1,
         }]
     }
-    device.queue.writeBuffer(objNormalBuffer, 0, flatObjNormals);
+
+    const objColorBuffer = device.createBuffer({
+        label: "positions buffer",
+        size: flatObjVertices.byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+
+
+    const objColorBufferLayout = {
+        label: "pos buffer layout",
+        arrayStride: sizeof["vec4"],
+        attributes: [{
+            format: "float32x4",
+            offset: 0,
+            shaderLocation: 2,
+        }]
+    };
+
 
     const objIndexBuffer = device.createBuffer({
         label: "index buffer",
@@ -76,7 +94,6 @@ async function main() {
         usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
     })
 
-    device.queue.writeBuffer(objIndexBuffer, 0, objIndices);
 
 
     const textureBuffer = device.createBuffer({
@@ -90,9 +107,14 @@ async function main() {
         attributes: [{
             format: "float32x2",
             offset: 0,
-            shaderLocation: 2,
+            shaderLocation: 3,
         }]
     }
+
+
+    device.queue.writeBuffer(objPosBuffer, 0, flatObjVertices);
+    device.queue.writeBuffer(objNormalBuffer, 0, flatObjNormals);
+    device.queue.writeBuffer(objIndexBuffer, 0, objIndices);
     device.queue.writeBuffer(textureBuffer, 0, flatten(objTexCoords))
 
 
@@ -108,7 +130,12 @@ async function main() {
         vertex: {
             module: wgsl,
             entryPoint: 'main_vs',
-            buffers: [objPosBufferLayout, objNormalBufferLayout, textureBufferLayout],
+            buffers: [
+                objPosBufferLayout,
+                objNormalBufferLayout,
+                objColorBufferLayout,
+                textureBufferLayout
+            ],
         },
         fragment: {
             module: wgsl,
@@ -125,9 +152,7 @@ async function main() {
             frontFace: "ccw",
             cullMode: "back",
         },
-        multisample: {
-            count: 4,
-        },
+        multisample: { count: 4 },
     });
 
 
@@ -164,24 +189,20 @@ async function main() {
     });
 
 
-    const uniformBufferSize = 4 * 16; // 4x4 matrix
+    const uniformBufferSize = (4 * 16) * 2 + 4 * 4; // 4x4 matrix * 2 + vec3
 
-    const uniformBuffer = device.createBuffer({
+    const eyeUniBuffer = device.createBuffer({
         size: uniformBufferSize,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    const bindGroup = device.createBindGroup({
-        label: "bindgroup",
+    const eyeBindGroup = device.createBindGroup({
+        label: "eye bindgroup",
         layout: pipeline.getBindGroupLayout(0),
         entries: [
             {
                 binding: 0,
-                resource: {
-                    buffer: uniformBuffer,
-                    offset: 0,
-                    size: 64,
-                },
+                resource: { buffer: eyeUniBuffer },
             },
             {
                 binding: 1,
@@ -194,17 +215,66 @@ async function main() {
         ],
     });
 
+    const depthUniBuffer = device.createBuffer({
+        size: uniformBufferSize,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+    const depthBindGroup = device.createBindGroup({
+        label: "depth bindgroup",
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+            {
+                binding: 0,
+                resource: { buffer: depthUniBuffer },
+            },
+            {
+                binding: 1,
+                resource: depthMap.createView()
+            },
+            /*             {
+                            binding: 2,
+                            resource: depthMap.sampler
+                        }, */
+        ],
+    });
+
+
+    // Camera, matrix etc. setup
     const aspect = canvas.width / canvas.height
-    const projectionMatrix = perspective(90.0, aspect, 0.1, 100.0)
-    const modelViewProjectionMatrix = mat4();
+    const upVec = vec3(0.0, 1.0, 0.0)
     const eye = vec3(1.0, 1.5, 1.5);
     const lookAtPoint = vec3(0.0, 0.0, 0.0);
-    const upVec = vec3(0.0, 1.0, 0.0)
+
     const viewMatrix = lookAt(eye, lookAtPoint, upVec)
+    const projectionMatrix = perspective(90.0, aspect, 0.1, 100.0)
+    const modelViewProjectionMatrix = mat4();
     const transformationMatrix = mult(projectionMatrix, mult(viewMatrix, modelViewProjectionMatrix))
 
+    // Setup point light and matrices
+    let pointLight = vec3(0, 2.0, -2);
+    // Approximate center of mass, maybe, who knows
+    const lightTarget = vec3(0, 0.5, 0.0);
+    let lightView = lookAt(pointLight, lightTarget, upVec)
 
-    device.queue.writeBuffer(uniformBuffer, 0, flatten(transformationMatrix));
+    let lightViewProj = mult(projectionMatrix, lightView)
+
+    // Set uniform data
+    const uniformArraySize = 16 + 16 + 3 // 4x4 * 2 + 1*3
+    const mat4Length = flatten(mat4()).length
+
+    let eyeData = new Float32Array(uniformArraySize);
+    eyeData.set(flatten(transformationMatrix));
+    eyeData.set(flatten(lightViewProj), mat4Length);
+    eyeData.set(flatten(pointLight), mat4Length * 2);
+    console.log(eyeData)
+    let depthData = new Float32Array(uniformArraySize);
+    depthData.set(flatten(transformationMatrix));
+    depthData.set(flatten(lightViewProj), mat4Length);
+    depthData.set(flatten(pointLight), mat4Length * 2);
+
+    device.queue.writeBuffer(eyeUniBuffer, 0, eyeData);
+    device.queue.writeBuffer(depthUniBuffer, 0, depthData);
 
     function render() {
         const encoder = device.createCommandEncoder();
@@ -229,8 +299,9 @@ async function main() {
         pass.setPipeline(pipeline);
         pass.setVertexBuffer(0, objPosBuffer);
         pass.setVertexBuffer(1, objNormalBuffer);
-        pass.setVertexBuffer(2, textureBuffer)
-        pass.setBindGroup(0, bindGroup);
+        pass.setVertexBuffer(2, objColorBuffer);
+        pass.setVertexBuffer(3, textureBuffer)
+        pass.setBindGroup(0, eyeBindGroup);
         pass.setIndexBuffer(objIndexBuffer, 'uint32');
 
         pass.drawIndexed(objIndices.length);
