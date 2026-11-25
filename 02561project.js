@@ -109,21 +109,38 @@ async function main() {
         },
     });
 
+
+
     const canvasTexture = context.getCurrentTexture();
 
     const depthTexture = device.createTexture({
+        label: "Depth texture",
         size: [canvas.width, canvas.height],
         format: 'depth24plus',
         sampleCount: 4,
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
+
+
     const msaaTexture = device.createTexture({
+        label: "msaa texture",
         size: [canvas.width, canvas.height],
         format: canvasTexture.format,
         sampleCount: 4,
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
 
+    // Seperate depth map, depth texture is used for culling
+    const depthMap = device.createTexture({
+        size: [canvas.width, canvas.height],
+        format: 'depth32float',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+
+    depthMap.sampler = device.createSampler({
+        label: "depthMap sampler",
+
+    });
 
 
     const uniformBufferSize = 4 * 16; // 4x4 matrix
@@ -133,8 +150,8 @@ async function main() {
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    const uniformBindGroup = device.createBindGroup({
-        label: "uniform bindgroup",
+    const bindGroup = device.createBindGroup({
+        label: "bindgroup",
         layout: pipeline.getBindGroupLayout(0),
         entries: [
             {
@@ -145,14 +162,23 @@ async function main() {
                     size: 64,
                 },
             },
+            {
+                binding: 1,
+                resource: depthMap.createView()
+            },
+            {
+                binding: 2,
+                resource: depthMap.sampler
+            },
         ],
     });
+
     const aspect = canvas.width / canvas.height
     const projectionMatrix = perspective(90.0, aspect, 0.1, 100.0)
     const modelViewProjectionMatrix = mat4();
-    const eye = vec3(0.5, 0.5, 3.0);
+    const eye = vec3(1.0, 1.5, 1.5);
     const lookAtPoint = vec3(0.0, 0.0, 0.0);
-    const upVec = vec3(0.0, 1.0, 2.0)
+    const upVec = vec3(0.0, 1.0, 0.0)
     const viewMatrix = lookAt(eye, lookAtPoint, upVec)
     const transformationMatrix = mult(projectionMatrix, mult(viewMatrix, modelViewProjectionMatrix))
 
