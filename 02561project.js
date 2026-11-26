@@ -20,6 +20,10 @@ async function main() {
     const obj_filename = "../3d_models/utah_teapot.obj";
     const obj = await readOBJFile(obj_filename, 0.25, true);
 
+    /*  const bumbFilename = "../3d_models/lpshead/lambertian.jpg";
+     const response = await fetch(bumbFilename);
+     const blob = await response.blob();
+     const lpsTexture = await createImageBitmap(blob, { colorSpaceConversion: "none" }); */
 
     const objVertices = obj.vertices;
     const flatObjVertices = flatten(objVertices);
@@ -36,7 +40,7 @@ async function main() {
     const flatObjColors = flatten(objColors)
 
     const objTexCoords = obj.texCoords
-
+    const flatTexCoords = flatten(objTexCoords)
 
 
     const objPosBuffer = device.createBuffer({
@@ -96,12 +100,13 @@ async function main() {
 
 
 
-    const textureBuffer = device.createBuffer({
+    const texCoordBuffer = device.createBuffer({
         label: "texture buffer",
-        size: flatten(objTexCoords).byteLength,
+        size: flatTexCoords.byteLength,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     })
-    const textureBufferLayout = {
+
+    const texCoordBufferLayout = {
         label: "texture buffer layout",
         arrayStride: sizeof["vec2"],
         attributes: [{
@@ -115,7 +120,7 @@ async function main() {
     device.queue.writeBuffer(objPosBuffer, 0, flatObjVertices);
     device.queue.writeBuffer(objNormalBuffer, 0, flatObjNormals);
     device.queue.writeBuffer(objIndexBuffer, 0, objIndices);
-    device.queue.writeBuffer(textureBuffer, 0, flatten(objTexCoords))
+    device.queue.writeBuffer(texCoordBuffer, 0, flatTexCoords)
 
 
 
@@ -124,9 +129,20 @@ async function main() {
     const wgslcode = await fetch(wgslfile, { cache: "reload" }).then(r => r.text());
     const wgsl = device.createShaderModule({ code: wgslcode });
 
+    const bindGroupLayout = device.createBindGroupLayout({
+        entries: [
+            { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: {} },
+            { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "unfilterable-float" } },
+            { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
+            //{ binding: 3, visibility: GPUShaderStage.FRAGMENT },
+        ],
+    });
+
+    const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
+
     const pipeline = device.createRenderPipeline({
         label: "pipeline",
-        layout: 'auto',
+        layout: pipelineLayout,
         vertex: {
             module: wgsl,
             entryPoint: 'main_vs',
@@ -134,7 +150,7 @@ async function main() {
                 objPosBufferLayout,
                 objNormalBufferLayout,
                 objColorBufferLayout,
-                textureBufferLayout
+                texCoordBufferLayout
             ],
         },
         fragment: {
@@ -208,10 +224,10 @@ async function main() {
                 binding: 1,
                 resource: depthMap.createView()
             },
-            /*             {
-                            binding: 2,
-                            resource: depthMap.sampler
-                        }, */
+            {
+                binding: 2,
+                resource: depthMap.sampler
+            },
         ],
     });
 
@@ -232,10 +248,10 @@ async function main() {
                 binding: 1,
                 resource: depthMap.createView()
             },
-            /*             {
-                            binding: 2,
-                            resource: depthMap.sampler
-                        }, */
+            {
+                binding: 2,
+                resource: depthMap.sampler
+            },
         ],
     });
 
@@ -267,7 +283,7 @@ async function main() {
     eyeData.set(flatten(transformationMatrix));
     eyeData.set(flatten(lightViewProj), mat4Length);
     eyeData.set(flatten(pointLight), mat4Length * 2);
-    console.log(eyeData)
+
     let depthData = new Float32Array(uniformArraySize);
     depthData.set(flatten(transformationMatrix));
     depthData.set(flatten(lightViewProj), mat4Length);
@@ -300,7 +316,7 @@ async function main() {
         pass.setVertexBuffer(0, objPosBuffer);
         pass.setVertexBuffer(1, objNormalBuffer);
         pass.setVertexBuffer(2, objColorBuffer);
-        pass.setVertexBuffer(3, textureBuffer)
+        pass.setVertexBuffer(3, texCoordBuffer)
         pass.setBindGroup(0, eyeBindGroup);
         pass.setIndexBuffer(objIndexBuffer, 'uint32');
 
